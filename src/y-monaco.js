@@ -5,7 +5,7 @@ import { createMutex } from "lib0/mutex.js";
 import { Awareness } from "y-protocols/awareness.js"; // eslint-disable-line
 
 class RelativeSelection {
-  /**
+  /** class that stores Y.RelationPosition
    * @param {Y.RelativePosition} start
    * @param {Y.RelativePosition} end
    * @param {monaco.SelectionDirection} direction
@@ -17,7 +17,7 @@ class RelativeSelection {
   }
 }
 
-/**
+/** MonacoSelection => RelativeSelection (?)
  * @param {monaco.editor.IStandaloneCodeEditor} editor
  * @param {monaco.editor.ITextModel} monacoModel
  * @param {Y.Text} type
@@ -40,7 +40,7 @@ const createRelativeSelection = (editor, monacoModel, type) => {
   return null;
 };
 
-/**
+/** RelativeSelection => MonacoSelection
  * @param {monaco.editor.IEditor} editor
  * @param {Y.Text} type
  * @param {RelativeSelection} relSel
@@ -75,16 +75,21 @@ const createMonacoSelectionFromRelativeSelection = (
   return null;
 };
 
+// ------------------ START ------------------ //
+
 export class MonacoBinding {
   /**
    * @param {Y.Text} ytext
    * @param {monaco.editor.ITextModel} monacoModel
-   * @param {Set<monaco.editor.IStandaloneCodeEditor>} [editors]
+   * @param {Set<monaco.editor.IStandaloneCodeEditor>} [editors] // why there is a set of editors
    * @param {Awareness?} [awareness]
    */
   constructor(ytext, monacoModel, editors = new Set(), awareness = null) {
+    // what is the difference between Y.Doc and Y.Text?
     this.doc = /** @type {Y.Doc} */ (ytext.doc);
     this.ytext = ytext;
+
+    // what is the difference between TextModel and Editor
     this.monacoModel = monacoModel;
     this.editors = editors;
     this.mux = createMutex();
@@ -92,6 +97,8 @@ export class MonacoBinding {
      * @type {Map<monaco.editor.IStandaloneCodeEditor, RelativeSelection>}
      */
     this._savedSelections = new Map();
+
+    // Event & Event handler: before all transaction
     this._beforeTransaction = () => {
       this.mux(() => {
         this._savedSelections = new Map();
@@ -105,15 +112,31 @@ export class MonacoBinding {
         });
       });
     };
+    // Y.Doc transaction?
     this.doc.on("beforeAllTransactions", this._beforeTransaction);
+
+    // what is decoration
+
+    /**
+     * @type {Map<monaco.editor.IStandaloneCodeEditor, string[]>}
+     */
     this._decorations = new Map();
+    // render decoration of editor?
     this._rerenderDecorations = () => {
       editors.forEach((editor) => {
         if (awareness && editor.getModel() === monacoModel) {
           // render decorations
           const currentDecorations = this._decorations.get(editor) || [];
+
+          /**
+           * @type {monaco.editor.IModelDeltaDecoration[]}
+           */
           const newDecorations = [];
           awareness.getStates().forEach((state, clientID) => {
+            // state contained info: selection(start, end)
+            // client ID is yjs ID
+
+            // if clientID is not mine, and selection from this client is not empty
             if (
               clientID !== this.doc.clientID &&
               state.selection != null &&
@@ -135,6 +158,8 @@ export class MonacoBinding {
                 headAbs.type === ytext
               ) {
                 let start, end, afterContentClassName, beforeContentClassName;
+
+                // check if LTR or RTL
                 if (anchorAbs.index < headAbs.index) {
                   start = monacoModel.getPositionAt(anchorAbs.index);
                   end = monacoModel.getPositionAt(headAbs.index);
@@ -148,6 +173,7 @@ export class MonacoBinding {
                   beforeContentClassName =
                     "yRemoteSelectionHead yRemoteSelectionHead-" + clientID;
                 }
+
                 newDecorations.push({
                   range: new monaco.Range(
                     start.lineNumber,
@@ -164,8 +190,12 @@ export class MonacoBinding {
               }
             }
           });
+          // console.log("current", currentDecorations);
+          // console.log("new", newDecorations);
           this._decorations.set(
             editor,
+            // render decorations
+            // All decorations added through this call will get the ownerId of this editor.
             editor.deltaDecorations(currentDecorations, newDecorations)
           );
         } else {
@@ -174,9 +204,15 @@ export class MonacoBinding {
         }
       });
     };
+
+    // y.text observer. When y.text creates any event
+    /**
+     * @type {function(Y.YTextEvent, Y.Transaction):void}
+     */
     this._ytextObserver = (event) => {
       this.mux(() => {
         let index = 0;
+        // TODO what is delta
         event.delta.forEach((op) => {
           if (op.retain !== undefined) {
             index += op.retain;
@@ -204,6 +240,8 @@ export class MonacoBinding {
             throw error.unexpectedCase();
           }
         });
+
+        // restore self-saved selections
         this._savedSelections.forEach((rsel, editor) => {
           const sel = createMonacoSelectionFromRelativeSelection(
             editor,
@@ -212,6 +250,9 @@ export class MonacoBinding {
             this.doc
           );
           if (sel !== null) {
+            console.log("Restore self-saved selections");
+            console.log(sel);
+            // if not restore, the selection will be enlarged by the insertion of text
             editor.setSelection(sel);
           }
         });
@@ -219,12 +260,25 @@ export class MonacoBinding {
       this._rerenderDecorations();
     };
     ytext.observe(this._ytextObserver);
+
+    // why there creates a block-level scope?
     {
+      // set value of monaco model to value of ytext
       const ytextValue = ytext.toString();
       if (monacoModel.getValue() !== ytextValue) {
         monacoModel.setValue(ytextValue);
       }
     }
+
+    // this is a disposable handler
+    // anyway, what is disposable?
+
+    // apply change from model to y.text
+    // This handler will fire a y.text event so that yTextObserver will be invoked
+
+    /**
+     * @type {monaco.IDisposable}
+     */
     this._monacoChangeHandler = monacoModel.onDidChangeContent((event) => {
       // apply changes from right to left
       this.mux(() => {
@@ -234,17 +288,23 @@ export class MonacoBinding {
               (change1, change2) => change2.rangeOffset - change1.rangeOffset
             )
             .forEach((change) => {
+              // it will trigger y.text event
               ytext.delete(change.rangeOffset, change.rangeLength);
               ytext.insert(change.rangeOffset, change.text);
             });
         }, this);
       });
     });
+
+    // onWillDispose lifecycle method?
     monacoModel.onWillDispose(() => {
       this.destroy();
     });
+
+    // register awareness
     if (awareness) {
       editors.forEach((editor) => {
+        // when the cursor selection has changed, update selection(start, end) to awareness
         editor.onDidChangeCursorSelection(() => {
           if (editor.getModel() === monacoModel) {
             const sel = editor.getSelection();
@@ -264,12 +324,14 @@ export class MonacoBinding {
             });
           }
         });
+        // when awareness changed, render decorations again
         awareness.on("change", this._rerenderDecorations);
       });
       this.awareness = awareness;
     }
   }
 
+  // clean up when monacoModel.onWillDispose (this method is invoked here)
   destroy() {
     this._monacoChangeHandler.dispose();
     this.ytext.unobserve(this._ytextObserver);
