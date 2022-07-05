@@ -21,7 +21,9 @@ module.exports = {
   devServer: {
     contentBase: path.join(__dirname, './demo'),
     compress: true,
-    publicPath: '/dist/'
+    publicPath: '/dist/',
+    host: '0.0.0.0',
+    useLocalIp: true
   },
   module: {
     rules: [{
