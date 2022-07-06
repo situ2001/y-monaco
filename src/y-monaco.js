@@ -98,8 +98,12 @@ export class MonacoBinding {
      */
     this._savedSelections = new Map();
 
+    // issues
+    // alert([...monacoModel.getEOL()].map((v) => v.charCodeAt(0)));
+
     // Event & Event handler: before all transaction
-    this._beforeTransaction = () => {
+    this._beforeTransaction = (e) => {
+      // console.log(e);
       this.mux(() => {
         this._savedSelections = new Map();
         editors.forEach((editor) => {
@@ -114,6 +118,7 @@ export class MonacoBinding {
     };
     // Y.Doc transaction?
     this.doc.on("beforeAllTransactions", this._beforeTransaction);
+    // this.doc.on("beforeTransaction", this._beforeTransaction);
 
     // what is decoration
 
@@ -211,6 +216,9 @@ export class MonacoBinding {
      */
     this._ytextObserver = (event) => {
       this.mux(() => {
+        // FIXED line seq issue
+        monacoModel.setEOL(monaco.editor.EndOfLineSequence.LF);
+
         let index = 0;
         // TODO what is delta
         event.delta.forEach((op) => {
@@ -250,8 +258,8 @@ export class MonacoBinding {
             this.doc
           );
           if (sel !== null) {
-            console.log("Restore self-saved selections");
-            console.log(sel);
+            // console.log("Restore self-saved selections");
+            // console.log(sel);
             // if not restore, the selection will be enlarged by the insertion of text
             editor.setSelection(sel);
           }
@@ -280,6 +288,7 @@ export class MonacoBinding {
      * @type {monaco.IDisposable}
      */
     this._monacoChangeHandler = monacoModel.onDidChangeContent((event) => {
+      // console.log("Did Content Changed");
       // apply changes from right to left
       this.mux(() => {
         this.doc.transact(() => {
@@ -306,6 +315,9 @@ export class MonacoBinding {
       editors.forEach((editor) => {
         // when the cursor selection has changed, update selection(start, end) to awareness
         editor.onDidChangeCursorSelection(() => {
+          // FIXED line seq issue
+          monacoModel.setEOL(monaco.editor.EndOfLineSequence.LF);
+
           if (editor.getModel() === monacoModel) {
             const sel = editor.getSelection();
             if (sel === null) {
