@@ -1,38 +1,41 @@
-const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
-const path = require('path')
+const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
+const path = require("path");
 
 module.exports = {
-  mode: 'development',
-  devtool: 'source-map',
+  mode: "development",
+  devtool: "source-map",
   entry: {
-    monaco: './demo/monaco-demo.js'
+    monaco: "./demo/monaco-demo.js",
   },
   output: {
-    globalObject: 'self',
-    path: path.resolve(__dirname, './demo/dist/'),
-    filename: '[name].bundle.js',
-    publicPath: '/dist/'
+    globalObject: "self",
+    path: path.resolve(__dirname, "./demo/dist/"),
+    filename: "[name].bundle.js",
+    publicPath: "/dist/",
   },
   resolve: {
     alias: {
-      'y-monaco': path.resolve(__dirname, 'src/y-monaco.js')
-    }
+      "y-monaco": path.resolve(__dirname, "src/y-monaco.js"),
+    },
   },
   devServer: {
-    contentBase: path.join(__dirname, './demo'),
+    contentBase: path.join(__dirname, "./demo"),
     compress: true,
-    publicPath: '/dist/'
+    publicPath: "/dist/",
+    host: "0.0.0.0",
+    useLocalIp: true,
   },
   module: {
-    rules: [{
-      test: /\.css$/,
-      use: ['style-loader', 'css-loader']
-    }, {
-      test: /\.ttf$/,
-      use: ['file-loader']
-    }]
+    rules: [
+      {
+        test: /\.css$/,
+        use: ["style-loader", "css-loader"],
+      },
+      {
+        test: /\.ttf$/,
+        use: ["file-loader"],
+      },
+    ],
   },
-  plugins: [
-    new MonacoWebpackPlugin()
-  ]
-}
+  plugins: [new MonacoWebpackPlugin()],
+};
